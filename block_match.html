@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlockMatch</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter font for clean typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117;
+            color: #c9d1d9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            max-width: 500px;
+            width: 100%;
+        }
+        canvas {
+            background-color: #1a222c;
+            border: 2px solid #282f38;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+            margin-bottom: 1.5rem;
+        }
+        .message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(26, 34, 44, 0.95);
+            border: 2px solid #3B82F6;
+            border-radius: 0.75rem;
+            padding: 2rem;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7);
+            text-align: center;
+            z-index: 100;
+        }
+        .hidden {
+            display: none;
+        }
+        .block-shape-container {
+            display: flex;
+            gap: 1rem;
+        }
+        .block-shape-preview {
+            border: 1px solid #282f38;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            cursor: grab;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            background-color: #1a222c;
+        }
+        .block-shape-preview:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        .block-shape-preview.dragging {
+            cursor: grabbing;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="game-container">
+        <h1 class="text-3xl md:text-5xl font-bold text-center mb-4">Blockblast</h1>
+        <div class="flex justify-between w-full px-2 mb-2">
+            <div class="text-xl font-semibold">Score: <span id="score">0</span></div>
+            <div class="text-xl font-semibold">High Score: <span id="highScore">0</span></div>
+        </div>
+        <canvas id="gameCanvas" width="450" height="450"></canvas>
+        <div class="text-center">
+            <h2 class="text-xl font-semibold mb-2">Next Blocks:</h2>
+            <div id="nextBlocksContainer" class="block-shape-container justify-center"></div>
+        </div>
+        <div id="status" class="text-center text-lg md:text-xl font-bold"></div>
+        <div class="flex gap-4">
+            <button id="startBtn" class="bg-blue-600 text-white font-semibold py-2 px-6 rounded-full hover:bg-blue-700 transition-colors duration-300">Start Game</button>
+        </div>
+        <p id="userIdDisplay" class="text-sm mt-4 text-gray-500"></p>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="gameOverBox" class="message-box hidden">
+        <h2 class="text-2xl font-bold mb-4">Game Over!</h2>
+        <p id="finalScore" class="text-lg mb-2">Final Score: 0</p>
+        <button id="restartBtn" class="bg-blue-600 text-white font-semibold py-2 px-6 rounded-full hover:bg-blue-700 transition-colors duration-300">Play Again</button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Global Variables
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Game state variables
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElem = document.getElementById('score');
+        const highScoreElem = document.getElementById('highScore');
+        const statusElem = document.getElementById('status');
+        const startBtn = document.getElementById('startBtn');
+        const gameOverBox = document.getElementById('gameOverBox');
+        const restartBtn = document.getElementById('restartBtn');
+        const finalScoreElem = document.getElementById('finalScore');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+        const nextBlocksContainer = document.getElementById('nextBlocksContainer');
+
+        const GRID_SIZE = 9;
+        const BLOCK_SIZE = canvas.width / GRID_SIZE;
+        const COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6'];
+        const SHAPES = {
+            '1x1': [[1]],
+            '1x2': [[1, 1]],
+            '1x3': [[1, 1, 1]],
+            '2x2': [[1, 1], [1, 1]],
+            'L-shape': [[1, 0], [1, 0], [1, 1]],
+            'T-shape': [[1, 1, 1], [0, 1, 0]],
+            'Z-shape': [[1, 1, 0], [0, 1, 1]],
+            'S-shape': [[0, 1, 1], [1, 1, 0]],
+            'line-3': [[1], [1], [1]],
+            'line-4': [[1, 1, 1, 1]],
+            'line-5': [[1, 1, 1, 1, 1]],
+            'big-square': [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+        };
+        const SHAPE_KEYS = Object.keys(SHAPES);
+
+        let grid = [];
+        let score = 0;
+        let highScore = 0;
+        let nextShapes = [];
+        let isAuthReady = false;
+        let db, auth;
+        let userId;
+
+        // Drag and Drop variables
+        let isDragging = false;
+        let draggedShape = null;
+        let draggedShapeIndex = -1;
+        let draggedColor = null;
+
+        // Firebase Initialization
+        if (firebaseConfig) {
+            setLogLevel('Debug');
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                } else {
+                    userId = `anon-${crypto.randomUUID()}`;
+                }
+                userIdDisplay.textContent = `User ID: ${userId}`;
+                isAuthReady = true;
+                loadHighScore();
+            });
+
+            // Sign in anonymously if no custom token is provided
+            if (initialAuthToken) {
+                await signInWithCustomToken(auth, initialAuthToken).catch(async (error) => {
+                    console.error("Custom token sign-in failed:", error);
+                    await signInAnonymously(auth);
+                });
+            } else {
+                await signInAnonymously(auth);
+            }
+        }
+
+        // Firestore functions
+        function getHighScoresDocRef() {
+            if (!db || !userId) return null;
+            return doc(db, `artifacts/${appId}/users/${userId}/highscores/blockmatch`);
+        }
+
+        async function saveHighScore(newScore) {
+            const highScoresRef = getHighScoresDocRef();
+            if (!highScoresRef) {
+                console.error("Firestore not ready or user ID is missing.");
+                return;
+            }
+            try {
+                await setDoc(highScoresRef, { highScore: newScore }, { merge: true });
+            } catch (error) {
+                console.error("Error saving high score:", error);
+            }
+        }
+
+        function loadHighScore() {
+            const highScoresRef = getHighScoresDocRef();
+            if (!highScoresRef) {
+                console.error("Firestore not ready or user ID is missing.");
+                return;
+            }
+            onSnapshot(highScoresRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    highScore = docSnap.data().highScore || 0;
+                    highScoreElem.textContent = highScore;
+                }
+            }, (error) => {
+                console.error("Error listening to high score:", error);
+            });
+        }
+
+        // Game Logic
+        function createGrid() {
+            grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
+        }
+
+        function drawGrid() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    const color = grid[y][x];
+                    ctx.fillStyle = color ? color : '#1a222c';
+                    ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+                }
+            }
+        }
+
+        function generateNextShapes() {
+            nextShapes = [];
+            for (let i = 0; i < 3; i++) {
+                const randomShapeKey = SHAPE_KEYS[Math.floor(Math.random() * SHAPE_KEYS.length)];
+                nextShapes.push({
+                    shape: SHAPES[randomShapeKey],
+                    color: COLORS[Math.floor(Math.random() * COLORS.length)]
+                });
+            }
+        }
+
+        function drawNextShapes() {
+            nextBlocksContainer.innerHTML = '';
+            nextShapes.forEach((item, index) => {
+                const previewCanvas = document.createElement('canvas');
+                previewCanvas.width = BLOCK_SIZE * 3;
+                previewCanvas.height = BLOCK_SIZE * 3;
+                previewCanvas.classList.add('block-shape-preview');
+                
+                const previewCtx = previewCanvas.getContext('2d');
+                const shape = item.shape;
+                const color = item.color;
+                
+                const blockWidth = previewCanvas.width / 3;
+                const blockHeight = previewCanvas.height / 3;
+                
+                for (let y = 0; y < shape.length; y++) {
+                    for (let x = 0; x < shape[y].length; x++) {
+                        if (shape[y][x] === 1) {
+                            previewCtx.fillStyle = color;
+                            previewCtx.fillRect(x * blockWidth, y * blockHeight, blockWidth - 2, blockHeight - 2);
+                        }
+                    }
+                }
+
+                // Add drag listeners to the preview canvases
+                previewCanvas.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    draggedShape = item.shape;
+                    draggedColor = item.color;
+                    draggedShapeIndex = index;
+                    previewCanvas.classList.add('dragging');
+                });
+                
+                nextBlocksContainer.appendChild(previewCanvas);
+            });
+        }
+
+        function checkPlacement(shape, startX, startY) {
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x] === 1) {
+                        const boardX = startX + x;
+                        const boardY = startY + y;
+                        if (boardX >= GRID_SIZE || boardY >= GRID_SIZE || boardX < 0 || boardY < 0 || grid[boardY][boardX] !== null) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        function placeBlock(shape, startX, startY, color) {
+            let points = 0;
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x] === 1) {
+                        grid[startY + y][startX + x] = color;
+                        points++;
+                    }
+                }
+            }
+            score += points;
+            scoreElem.textContent = score;
+
+            // Remove used shape
+            nextShapes.splice(draggedShapeIndex, 1);
+            draggedShape = null;
+            draggedShapeIndex = -1;
+            drawNextShapes();
+
+            const linesToClear = getLinesToClear();
+            if (linesToClear.length > 0) {
+                // Highlight the lines before clearing them
+                drawGrid();
+                highlightLines(linesToClear);
+                setTimeout(() => {
+                    clearLines(linesToClear);
+                    drawGrid();
+                    if (nextShapes.length === 0) {
+                        generateNextShapes();
+                        drawNextShapes();
+                    }
+                    if (isGameOver()) {
+                        endGame();
+                    }
+                }, 500); // Wait 500ms to show the highlight
+            } else {
+                 if (nextShapes.length === 0) {
+                    generateNextShapes();
+                    drawNextShapes();
+                }
+                drawGrid();
+                if (isGameOver()) {
+                    endGame();
+                }
+            }
+        }
+
+        function getLinesToClear() {
+            const linesToClear = [];
+            // Check rows
+            for (let y = 0; y < GRID_SIZE; y++) {
+                if (grid[y].every(block => block !== null)) {
+                    linesToClear.push({ type: 'row', index: y });
+                }
+            }
+
+            // Check columns
+            for (let x = 0; x < GRID_SIZE; x++) {
+                let isFull = true;
+                for (let y = 0; y < GRID_SIZE; y++) {
+                    if (grid[y][x] === null) {
+                        isFull = false;
+                        break;
+                    }
+                }
+                if (isFull) {
+                    linesToClear.push({ type: 'col', index: x });
+                }
+            }
+            return linesToClear;
+        }
+
+        function highlightLines(lines) {
+            ctx.globalAlpha = 0.5;
+            for (const line of lines) {
+                if (line.type === 'row') {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, line.index * BLOCK_SIZE, canvas.width, BLOCK_SIZE);
+                } else if (line.type === 'col') {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(line.index * BLOCK_SIZE, 0, BLOCK_SIZE, canvas.height);
+                }
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        function clearLines(lines) {
+            let clearedLinesCount = 0;
+            const clearedRows = new Set();
+            const clearedCols = new Set();
+
+            for (const line of lines) {
+                if (line.type === 'row') {
+                    clearedRows.add(line.index);
+                } else if (line.type === 'col') {
+                    clearedCols.add(line.index);
+                }
+            }
+
+            // Create a new grid without the cleared lines
+            const newGrid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
+            let newRow = GRID_SIZE - 1;
+            for (let y = GRID_SIZE - 1; y >= 0; y--) {
+                if (!clearedRows.has(y)) {
+                    let newCol = 0;
+                    for (let x = 0; x < GRID_SIZE; x++) {
+                        if (!clearedCols.has(x)) {
+                            newGrid[newRow][newCol] = grid[y][x];
+                            newCol++;
+                        }
+                    }
+                    newRow--;
+                } else {
+                    clearedLinesCount++;
+                }
+            }
+
+            // Add points for cleared lines
+            score += clearedLinesCount * 100;
+            scoreElem.textContent = score;
+            
+            // Overwrite the old grid with the new one
+            grid = newGrid;
+        }
+
+        function isGameOver() {
+            // Game over if none of the next blocks can be placed anywhere
+            for (const item of nextShapes) {
+                const shape = item.shape;
+                for (let y = 0; y < GRID_SIZE; y++) {
+                    for (let x = 0; x < GRID_SIZE; x++) {
+                        if (checkPlacement(shape, x, y)) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        function endGame() {
+            statusElem.textContent = "Game Over!";
+            gameOverBox.classList.remove('hidden');
+            finalScoreElem.textContent = `Final Score: ${score}`;
+            
+            if (score > highScore) {
+                saveHighScore(score);
+            }
+        }
+
+        function initGame() {
+            createGrid();
+            drawGrid();
+            generateNextShapes();
+            drawNextShapes();
+            score = 0;
+            scoreElem.textContent = score;
+            statusElem.textContent = "Drag and drop a block to start.";
+            gameOverBox.classList.add('hidden');
+            isDragging = false;
+            draggedShape = null;
+            draggedShapeIndex = -1;
+            draggedColor = null;
+        }
+
+        // Drag and drop event listeners
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging && draggedShape) {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                const gridX = Math.floor(mouseX / BLOCK_SIZE);
+                const gridY = Math.floor(mouseY / BLOCK_SIZE);
+                
+                drawGrid();
+                
+                // Draw a translucent preview
+                for (let y = 0; y < draggedShape.length; y++) {
+                    for (let x = 0; x < draggedShape[y].length; x++) {
+                        if (draggedShape[y][x] === 1) {
+                            const boardX = gridX + x;
+                            const boardY = gridY + y;
+                            if (boardX < GRID_SIZE && boardY < GRID_SIZE && boardX >= 0 && boardY >= 0) {
+                                ctx.fillStyle = checkPlacement(draggedShape, gridX, gridY) ? `${draggedColor}80` : '#dc262680';
+                                ctx.fillRect(boardX * BLOCK_SIZE, boardY * BLOCK_SIZE, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (isDragging && draggedShape) {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                const gridX = Math.floor(mouseX / BLOCK_SIZE);
+                const gridY = Math.floor(mouseY / BLOCK_SIZE);
+                
+                if (checkPlacement(draggedShape, gridX, gridY)) {
+                    placeBlock(draggedShape, gridX, gridY, draggedColor);
+                    statusElem.textContent = "Nice! Drag the next block to place it.";
+                } else {
+                    statusElem.textContent = "Cannot place the block here. Try a different spot.";
+                    drawGrid();
+                }
+                
+                isDragging = false;
+                draggedShape = null;
+                draggedShapeIndex = -1;
+                draggedColor = null;
+            }
+        });
+
+        startBtn.addEventListener('click', initGame);
+        restartBtn.addEventListener('click', initGame);
+
+        // Initial setup
+        initGame();
+
+    </script>
+</body>
+</html>

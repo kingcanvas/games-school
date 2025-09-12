@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZGame-School | A World of Games</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for a modern look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117;
+            color: #c9d1d9;
+        }
+        .text-gradient {
+            background-image: linear-gradient(to right, #6EE7B7, #3B82F6, #9333EA);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- Header & Navigation -->
+    <header class="sticky top-0 z-50 bg-gray-900 bg-opacity-80 backdrop-blur-sm shadow-lg">
+        <nav class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <a href="#" class="text-2xl font-bold text-white tracking-tight">ZGame-School</a>
+            <div class="hidden md:flex space-x-6">
+                <a href="#games" class="hover:text-white transition-colors duration-200">Games</a>
+                <a href="#about" class="hover:text-white transition-colors duration-200">About</a>
+            </div>
+            <!-- Mobile Menu Button -->
+            <button id="mobile-menu-button" class="md:hidden text-white focus:outline-none">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+                </svg>
+            </button>
+        </nav>
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="hidden md:hidden bg-gray-900 bg-opacity-90 backdrop-blur-sm p-4">
+            <a href="#games" class="block py-2 text-white hover:bg-gray-800 rounded-md transition-colors duration-200">Games</a>
+            <a href="#about" class="block py-2 text-white hover:bg-gray-800 rounded-md transition-colors duration-200">About</a>
+        </div>
+    </header>
+
+    <main class="py-12">
+
+        <!-- Hero Section -->
+        <section id="hero" class="container mx-auto px-4 text-center py-20">
+            <h1 class="text-5xl md:text-7xl font-extrabold leading-tight tracking-tight mb-4">
+                Explore the <span class="text-gradient">Gaming Universe</span>
+            </h1>
+            <p class="text-xl md:text-2xl text-gray-400 max-w-2xl mx-auto mb-8">
+                Dive into a collection of amazing games created with passion. Endless adventures await.
+            </p>
+            <a href="#games" class="inline-block bg-white text-gray-900 font-bold py-3 px-8 rounded-full shadow-lg hover:bg-gray-200 transition-transform transform hover:scale-105 duration-300">
+                Discover Games
+            </a>
+        </section>
+
+        <!-- Games Section -->
+        <section id="games" class="container mx-auto px-4 py-16">
+            <h2 class="text-4xl md:text-5xl font-bold text-center mb-12">Our Games</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- BlockMatch Game Card -->
+                <div class="bg-gray-800 rounded-xl overflow-hidden shadow-xl p-6 hover:shadow-2xl hover:bg-gray-700 transition-all duration-300">
+                    <img src="block_match.png" alt="BlockMatch" class="rounded-lg mb-4 w-full h-48 object-cover">
+                    <h3 class="text-2xl font-semibold mb-2">BlockMatch</h3>
+                    <p class="text-gray-400 text-sm">A strategic puzzle game where you match colorful blocks to clear the board. Plan your moves and aim for a combo.</p>
+                    <a href="block_match.html" class="mt-4 inline-block bg-green-600 text-white py-2 px-6 rounded-full font-semibold hover:bg-green-700 transition-colors duration-300">Play Now</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- About Section -->
+        <section id="about" class="container mx-auto px-4 py-16">
+            <h2 class="text-4xl md:text-5xl font-bold text-center mb-8">About Us</h2>
+            <div class="bg-gray-800 rounded-xl shadow-xl p-8 max-w-4xl mx-auto">
+                <p class="text-lg text-gray-400 text-center leading-relaxed">
+                    ZGame-School is a creative studio dedicated to crafting engaging and fun gaming experiences. Our mission is to build worlds that inspire, challenge, and entertain players of all ages. We believe in the power of games to connect people and tell incredible stories. Join us on our journey to create the next big hit!
+                </p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 py-6">
+        <div class="container mx-auto px-4 text-center text-gray-500">
+            <p>&copy; 2025 ZGame-School. All rights reserved.</p>
+            <p class="mt-2">Credits to ZGame-School</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript for Mobile Menu -->
+    <script>
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const mobileMenu = document.getElementById('mobile-menu');
+
+        mobileMenuButton.addEventListener('click', () => {
+            mobileMenu.classList.toggle('hidden');
+        });
+    </script>
+
+</body>
+</html>
